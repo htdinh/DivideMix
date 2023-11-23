@@ -7,16 +7,26 @@ import json
 import os
 import torch
 from torchnet.meter import AUCMeter
-
+from typing import Literal
             
 def unpickle(file):
     import _pickle as cPickle
     with open(file, 'rb') as fo:
-        dict = cPickle.load(fo, encoding='latin1')
-    return dict
+        ans = cPickle.load(fo, encoding='latin1')
+    return ans
 
 class cifar_dataset(Dataset): 
-    def __init__(self, dataset, r, noise_mode, root_dir, transform, mode, noise_file='', pred=[], probability=[], log=''): 
+    def __init__(self, 
+    dataset: Literal["cifar10", "cifar100"], 
+    r: float, 
+    noise_mode: Literal["sym", "asym"], 
+    root_dir: str, 
+    transform, 
+    mode: Literal["all", "labeled", "unlabeled"], 
+    noise_file='', 
+    pred=[], 
+    probability=[], 
+    log=''): 
         
         self.r = r # noise ratio
         self.transform = transform
@@ -164,16 +174,17 @@ class cifar_dataloader():
                     transforms.Normalize((0.507, 0.487, 0.441), (0.267, 0.256, 0.276)),
                 ])   
     def run(self,mode,pred=[],prob=[]):
+        # Depending on the mode, return a different DataLoader object
         if mode=='warmup':
             all_dataset = cifar_dataset(dataset=self.dataset, noise_mode=self.noise_mode, r=self.r, root_dir=self.root_dir, transform=self.transform_train, mode="all",noise_file=self.noise_file)                
             trainloader = DataLoader(
                 dataset=all_dataset, 
-                batch_size=self.batch_size*2,
+                batch_size=self.batch_size*2,  # Warm up has larger batch size (batch_size * 2)
                 shuffle=True,
                 num_workers=self.num_workers)             
             return trainloader
                                      
-        elif mode=='train':
+        elif mode=='train':  # In train mode, we return both labeled and unlabeled datasets
             labeled_dataset = cifar_dataset(dataset=self.dataset, noise_mode=self.noise_mode, r=self.r, root_dir=self.root_dir, transform=self.transform_train, mode="labeled", noise_file=self.noise_file, pred=pred, probability=prob,log=self.log)              
             labeled_trainloader = DataLoader(
                 dataset=labeled_dataset, 
@@ -189,7 +200,7 @@ class cifar_dataloader():
                 num_workers=self.num_workers)     
             return labeled_trainloader, unlabeled_trainloader
         
-        elif mode=='test':
+        elif mode=='test':  # In test model returns test_dataset
             test_dataset = cifar_dataset(dataset=self.dataset, noise_mode=self.noise_mode, r=self.r, root_dir=self.root_dir, transform=self.transform_test, mode='test')      
             test_loader = DataLoader(
                 dataset=test_dataset, 
@@ -198,7 +209,7 @@ class cifar_dataloader():
                 num_workers=self.num_workers)          
             return test_loader
         
-        elif mode=='eval_train':
+        elif mode=='eval_train':  # In eval_train model returns eval_dataset
             eval_dataset = cifar_dataset(dataset=self.dataset, noise_mode=self.noise_mode, r=self.r, root_dir=self.root_dir, transform=self.transform_test, mode='all', noise_file=self.noise_file)      
             eval_loader = DataLoader(
                 dataset=eval_dataset, 
